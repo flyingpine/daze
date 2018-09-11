@@ -16,6 +16,9 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/mohanson/acdb"
 )
 
 func Link(a, b io.ReadWriteCloser) {
@@ -171,43 +174,32 @@ func DarkMainlandIPNet() *NetBox {
 
 type Filter struct {
 	Client Dialer
-	Netbox NetBox
+	Router *acdb.Emerge
 }
 
 func (f *Filter) Dial(network, address string) (io.ReadWriteCloser, error) {
-	host, _, err := net.SplitHostPort(address)
-	if err != nil {
-		return nil, err
+	var p bool
+	f.Router.Get(address, &p)
+	if p {
+		return f.Client.Dial(network, address)
 	}
-	ipls, err := net.LookupIP(host)
-	if err != nil {
-		return net.Dial(network, address)
+	connl, connlErr := net.DialTimeout(network, address, time.Second*4)
+	if connlErr == nil {
+		return connl, nil
 	}
-	if f.Netbox.Has(ipls[0]) {
-		return net.Dial(network, address)
+	connr, connrErr := f.Client.Dial(network, address)
+	if connrErr == nil {
+		f.Router.Set(address, true)
+		return connr, nil
 	}
-	conn, err := f.Client.Dial(network, address)
-	if err != nil {
-		return net.Dial(network, address)
-	}
-	return conn, nil
+	return nil, connrErr
 }
 
 func NewFilter(dialer Dialer) *Filter {
-	netbox := NetBox{}
-	for _, e := range IPv4ReservedIPNet().L {
-		netbox.Add(e)
-	}
-	f := &Filter{
+	return &Filter{
 		Client: dialer,
-		Netbox: netbox,
+		Router: acdb.LRU(1024),
 	}
-	go func() {
-		for _, e := range DarkMainlandIPNet().L {
-			f.Netbox.Add(e)
-		}
-	}()
-	return f
 }
 
 type Locale struct {
