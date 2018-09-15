@@ -183,7 +183,7 @@ func (f *Filter) Dial(network, address string) (io.ReadWriteCloser, error) {
 	if p {
 		return f.Client.Dial(network, address)
 	}
-	connl, connlErr := net.DialTimeout(network, address, time.Second*4)
+	connl, connlErr := net.DialTimeout(network, address, time.Second*2)
 	if connlErr == nil {
 		return connl, nil
 	}
